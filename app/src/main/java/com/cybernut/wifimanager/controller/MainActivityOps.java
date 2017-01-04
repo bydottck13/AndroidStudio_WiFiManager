@@ -76,6 +76,9 @@ public class MainActivityOps {
                 results = wifiManager.getScanResults();
                 size = results.size();
                 Log.d(TAG, "Acquire wifi "+size);
+                for(int i=0; i<size; i++) {
+                    Log.d(TAG, results.get(i).SSID);
+                }
             }
         }, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
 
@@ -88,17 +91,6 @@ public class MainActivityOps {
 
                 Snackbar.make(view, "Scanning...", Snackbar.LENGTH_LONG)
                         .setAction("Action", null).show();
-
-                try {
-                    size = size - 1;
-                    while(size >= 0)
-                    {
-                        Log.d(TAG, results.get(size).SSID);
-                        size--;
-                    }
-                } catch (Exception e) {
-                    // TODO: handle exception
-                }
             }
         });
 
@@ -142,14 +134,16 @@ public class MainActivityOps {
     }
 
     private boolean mayRequestLocation() {
-        Log.d(TAG, "mayRequestCoarseLocation");
+        Log.d(TAG, "mayRequestLocation");
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             return true;
         }
+        Log.d(TAG, "newer than M");
         if (mMainActivity.get().checkSelfPermission(ACCESS_COARSE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED) {
             return true;
         }
+        Log.d(TAG, "no permission");
 
         if (mMainActivity.get().
                 shouldShowRequestPermissionRationale(ACCESS_COARSE_LOCATION)) {
