@@ -17,11 +17,19 @@ import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.View;
+import android.widget.ListView;
+import android.widget.SimpleAdapter;
+import android.widget.TextView;
 
 import com.cybernut.wifimanager.R;
+import com.cybernut.wifimanager.model.WiFiList;
 import com.cybernut.wifimanager.view.MainActivity;
 
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 
 import static android.Manifest.permission.ACCESS_COARSE_LOCATION;
@@ -33,15 +41,19 @@ public class MainActivityOps {
     private static final String TAG =
             MainActivityOps.class.getSimpleName();
 
-    WifiManager wifiManager;
-    int size = 0;
-    List<ScanResult> results;
+    private WifiManager wifiManager;
+    private int size = 0;
+    private List<ScanResult> results;
+    private ArrayList<HashMap<String, String>> mArrayList = new ArrayList<>();
+    private SimpleAdapter mAdapter;
+    private BroadcastReceiver mBroadcastReceiver;
 
     /**
      * Used to enable garbage collection.
      */
-    protected WeakReference<MainActivity> mMainActivity;
-    protected WeakReference<FloatingActionButton> mFab;
+    private WeakReference<MainActivity> mMainActivity;
+    private WeakReference<FloatingActionButton> mFab;
+    private WeakReference<TextView> mTextView;
 
     /**
      * Id to identity ACCESS_COARSE_LOCATION permission request.
@@ -57,30 +69,23 @@ public class MainActivityOps {
         initializeNonViewFields();
     }
 
-    public void initializeViewFields() {
+    private void initializeViewFields() {
         Log.d(TAG, "initializeViewFields");
         // Get references to the UI components.
         mMainActivity.get().setContentView(R.layout.activity_main);
         Toolbar toolbar = (Toolbar) mMainActivity.get().findViewById(R.id.toolbar);
         mMainActivity.get().setSupportActionBar(toolbar);
+        mTextView = new WeakReference<>
+                ((TextView) mMainActivity.get().findViewById(R.id.textView2));
+        WeakReference<ListView> mListView = new WeakReference<>
+                ((ListView) mMainActivity.get().findViewById(R.id.listView1));
 
         populateAutoComplete();
 
         wifiManager = (WifiManager) mMainActivity.get().getSystemService(Context.WIFI_SERVICE);
-
-        mMainActivity.get().registerReceiver(new BroadcastReceiver() {
-
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                // TODO Auto-generated method stub
-                results = wifiManager.getScanResults();
-                size = results.size();
-                Log.d(TAG, "Acquire wifi "+size);
-                for(int i=0; i<size; i++) {
-                    Log.d(TAG, results.get(i).SSID);
-                }
-            }
-        }, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
+        mAdapter = new SimpleAdapter(mMainActivity.get(), mArrayList, R.layout.list_wifi,
+                new String[] {"ssid", "power", "freq"}, new int[] {R.id.ssid, R.id.power, R.id.freq});
+        mListView.get().setAdapter(mAdapter);
 
         mFab = new WeakReference<>
                 ((FloatingActionButton) mMainActivity.get().findViewById(R.id.fab));
@@ -94,7 +99,7 @@ public class MainActivityOps {
             }
         });
 
-        if(wifiManager.isWifiEnabled()==false)
+        if(!wifiManager.isWifiEnabled())
         {
             AlertDialog.Builder dialog = new AlertDialog.Builder(mMainActivity.get());
             dialog.setTitle("Remind");
@@ -116,6 +121,56 @@ public class MainActivityOps {
             dialog.show();
         }
 
+        mBroadcastReceiver = new BroadcastReceiver() {
+
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                // TODO Auto-generated method stub
+                results = wifiManager.getScanResults();
+                size = results.size();
+                Log.d(TAG, "Acquire wifi "+size);
+                mArrayList.clear();
+
+                for(int i=0; i<size; i++) {
+                    //Log.d(TAG, results.get(i).SSID);
+                    //Log.d(TAG, results.get(i).level+" dBm");
+                    //Log.d(TAG, "freq "+results.get(i).frequency);
+
+                    HashMap<String, String> item = new HashMap<>();
+                    item.put("ssid", results.get(i).SSID);
+                    item.put("power", results.get(i).level+" dBm");
+                    String wifichn = WiFiList.WIFI_CHANNELS.containsKey(
+                            Integer.toString(results.get(i).frequency))?
+                            WiFiList.WIFI_CHANNELS.
+                                    get(Integer.toString(results.get(i).frequency)):"5G";
+                    item.put("freq", wifichn);
+                    mArrayList.add(item);
+                }
+
+                // Sort by power
+                Collections.sort(mArrayList, new Comparator<HashMap<String, String>>() {
+
+                    @Override
+                    public int compare(HashMap<String, String> lhs,
+                                       HashMap<String, String> rhs) {
+                        // TODO Auto-generated method stub
+                        return (lhs.get("power")).compareTo(rhs.get("power"));
+                    }
+                });
+
+                if(size > 0) {
+                    mTextView.get().setText(mArrayList.get(0).get("ssid"));
+                }
+                mAdapter.notifyDataSetChanged();
+            }
+        };
+        mMainActivity.get().registerReceiver(mBroadcastReceiver,
+                new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
+
+        if(size > 0) {
+            mTextView.get().setText(mArrayList.get(0).get("ssid"));
+        }
+
     }
 
     /**
@@ -124,6 +179,7 @@ public class MainActivityOps {
      */
     private void initializeNonViewFields() {
         Log.d(TAG, "initializeNonViewFields");
+
     }
 
     private void populateAutoComplete() {
@@ -191,6 +247,14 @@ public class MainActivityOps {
         mMainActivity = new WeakReference<>(mainActivity);
         // (Re)initialize all the View fields.
         initializeViewFields();
+    }
+
+    public void unregisterReceiverAndDestroy() {
+        Log.d(TAG, "go to unregisterReceiverAndDestroy");
+        if(mBroadcastReceiver!=null) {
+            mMainActivity.get().unregisterReceiver(mBroadcastReceiver);
+            mBroadcastReceiver = null;
+        }
     }
 
 }
